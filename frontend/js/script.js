@@ -5,8 +5,8 @@ import { supabase } from './supabase.js';
 // SUPABASE INITIALIZATION
 // ==========================================
 
-console.log('LIVELY: Supabase berhasil diinisialisasi!');
-console.log('Supabase Client:', supabase);
+console.log("LIVELY: Supabase berhasil diinisialisasi!");
+console.log("Supabase Client:", supabase);
 
 
 // ==========================================
@@ -68,7 +68,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 );
 
                 button.classList.add("active");
-
                 activeFilter = button.dataset.filter;
 
                 filterConcerts();
@@ -121,16 +120,16 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             message.textContent =
-                "Login Supabase akan kita aktifkan pada tahap berikutnya.";
+                "Fitur login Supabase belum diaktifkan.";
 
-            message.style.color = "green";
+            message.style.color = "orange";
 
         });
     }
 
 
     // ======================================
-    // REGISTER FORM
+    // REGISTER FORM - SUPABASE AUTH
     // ======================================
 
     const registerForm = document.getElementById("registerForm");
@@ -157,6 +156,14 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
+            if (!email) {
+
+                message.textContent = "Email wajib diisi.";
+                message.style.color = "red";
+
+                return;
+            }
+
             if (password.length < 8) {
 
                 message.textContent = "Password minimal 8 karakter.";
@@ -173,10 +180,54 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            message.textContent =
-                "Form valid! Registrasi Supabase akan kita aktifkan pada tahap berikutnya.";
+            message.textContent = "Sedang membuat akun...";
+            message.style.color = "blue";
 
-            message.style.color = "green";
+            try {
+
+                const { data, error } = await supabase.auth.signUp({
+
+                    email: email,
+                    password: password,
+
+                    options: {
+                        data: {
+                            full_name: name
+                        }
+                    }
+
+                });
+
+                if (error) {
+                    throw error;
+                }
+
+                if (data.session) {
+
+                    message.textContent =
+                        "Registrasi berhasil! Akun LIVELY kamu sudah dibuat.";
+
+                } else {
+
+                    message.textContent =
+                        "Registrasi berhasil! Silakan cek email untuk verifikasi akun.";
+
+                }
+
+                message.style.color = "green";
+
+                registerForm.reset();
+
+            } catch (error) {
+
+                console.error("Register error:", error);
+
+                message.textContent =
+                    "Registrasi gagal: " + error.message;
+
+                message.style.color = "red";
+
+            }
 
         });
     }
