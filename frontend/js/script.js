@@ -95,37 +95,53 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
 
-    // ======================================
-    // LOGIN FORM
-    // ======================================
+ 
+// ======================================
+// LOGIN FORM
+// ======================================
 
-    const loginForm = document.getElementById("loginForm");
+const loginForm = document.getElementById("loginForm");
 
-    if (loginForm) {
+if (loginForm) {
+    loginForm.addEventListener("submit", async function (event) {
+        event.preventDefault();
 
-        loginForm.addEventListener("submit", async function (event) {
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+        const message = document.getElementById("loginMessage");
 
-            event.preventDefault();
+        if (!email || !password) {
+            message.textContent = "Mohon lengkapi semua data.";
+            message.style.color = "red";
+            return;
+        }
 
-            const email = document.getElementById("email").value.trim();
-            const password = document.getElementById("password").value;
-            const message = document.getElementById("loginMessage");
+        message.textContent = "Sedang masuk...";
+        message.style.color = "orange";
 
-            if (!email || !password) {
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
 
-                message.textContent = "Mohon lengkapi semua data.";
-                message.style.color = "red";
-
-                return;
+            if (error) {
+                throw error;
             }
 
-            message.textContent =
-                "Fitur login Supabase belum diaktifkan.";
+            message.textContent = "Login berhasil! Mengalihkan...";
+            message.style.color = "green";
 
-            message.style.color = "orange";
+            // Ganti tujuan ini sesuai halaman utama LIVELY
+            window.location.href = "index.html";
 
-        });
-    }
+        } catch (error) {
+            message.textContent = error.message;
+            message.style.color = "red";
+        }
+    });
+}
+
 
 
     // ======================================
