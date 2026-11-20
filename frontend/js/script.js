@@ -92,12 +92,52 @@ document.addEventListener("DOMContentLoaded", function () {
     const loginMessage = document.getElementById("loginMessage");
     let isSigningIn = false;
 
+    async function getLoginDestination() {
+        const { data: userData, error: userError } =
+            await supabase.auth.getUser();
+
+        if (userError) throw userError;
+        if (!userData.user) {
+            throw new Error("Pengguna login tidak dapat diverifikasi.");
+        }
+
+        const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", userData.user.id)
+            .maybeSingle();
+
+        if (profileError) throw profileError;
+        if (profile && profile.role === "admin") return "admin.html";
+        if (!profile || profile.role !== "user") {
+            console.warn("Role profil tidak ditemukan atau tidak dikenal.");
+        }
+        return "index.html";
+    }
+
+    function redirectToHomeAfterRoleError(error) {
+        console.error("Login role check error:", error);
+        if (loginMessage) {
+            loginMessage.textContent =
+                "Role akun tidak dapat diverifikasi. Membuka halaman utama.";
+            loginMessage.style.color = "orange";
+        }
+        window.setTimeout(() => {
+            window.location.replace("index.html");
+        }, 1000);
+    }
+
     if (loginForm) {
         supabase.auth.getSession()
-            .then(({ data, error }) => {
+            .then(async ({ data, error }) => {
                 if (error) throw error;
                 if (data.session) {
-                    window.location.replace("index.html");
+                    try {
+                        const destination = await getLoginDestination();
+                        window.location.replace(destination);
+                    } catch (roleError) {
+                        redirectToHomeAfterRoleError(roleError);
+                    }
                 }
             })
             .catch(error => {
@@ -136,6 +176,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 loginMessage.style.color = "blue";
             }
 
+            let session;
             try {
                 const { data, error } = await supabase.auth.signInWithPassword({
                     email,
@@ -144,7 +185,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 if (error) throw error;
 
-                let session = data.session;
+                session = data.session;
                 if (!session) {
                     const sessionResult = await supabase.auth.getSession();
                     if (sessionResult.error) throw sessionResult.error;
@@ -154,8 +195,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (!session) {
                     throw new Error("Session login tidak tersedia. Silakan coba lagi.");
                 }
-
-                window.location.replace("index.html");
             } catch (error) {
                 console.error("Login error:", error);
                 if (loginMessage) {
@@ -167,6 +206,14 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
                 if (submitButton) submitButton.disabled = false;
                 isSigningIn = false;
+                return;
+            }
+
+            try {
+                const destination = await getLoginDestination();
+                window.location.replace(destination);
+            } catch (error) {
+                redirectToHomeAfterRoleError(error);
             }
         });
     }
