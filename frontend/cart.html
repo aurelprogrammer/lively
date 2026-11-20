@@ -35,6 +35,9 @@
         <div class="col-lg-8">
             <div class="cart-card">
                 <h4 class="gold">Detail Pesanan</h4>
+                <p id="cartStatus" class="text-warning small" role="status" aria-live="polite">
+                    Memuat data konser...
+                </p>
                 <div class="ticket-row">
                     <label class="form-label">Nama Konser</label>
                     <input type="text" id="artist" class="form-control" readonly>
@@ -43,9 +46,9 @@
                 <div class="ticket-row">
                     <label class="form-label">Jenis Tiket</label>
                     <select id="ticketType" class="form-select">
-                        <option value="150000">Regular - Rp150.000</option>
-                        <option value="250000">Festival - Rp250.000</option>
-                        <option value="400000">VIP - Rp400.000</option>
+                        <option value="Regular">Regular</option>
+                        <option value="Festival">Festival</option>
+                        <option value="VIP">VIP</option>
                     </select>
                 </div>
 
@@ -61,7 +64,7 @@
                 <h4 class="gold mb-4">Ringkasan</h4>
                 <div class="d-flex justify-content-between mb-3">
                     <span>Harga tiket</span>
-                    <span id="price">Rp150.000</span>
+                    <span id="price">-</span>
                 </div>
                 <div class="d-flex justify-content-between mb-3">
                     <span>Jumlah</span>
@@ -70,9 +73,9 @@
                 <hr class="border-secondary">
                 <div class="d-flex justify-content-between fw-bold mb-4">
                     <span>Total</span>
-                    <span class="gold" id="total">Rp150.000</span>
+                    <span class="gold" id="total">-</span>
                 </div>
-                <button class="btn btn-gold w-100" onclick="checkout()">
+                <button id="checkoutButton" class="btn btn-gold w-100" disabled>
                     Lanjut Checkout
                 </button>
                 <a href="concerts.html" class="btn btn-outline-light w-100 mt-2">
@@ -83,46 +86,119 @@
     </div>
 </div>
 
-<script>
+<script type="module">
+    import { supabase } from "./js/supabase.js";
+
     const params = new URLSearchParams(location.search);
-    const artist = params.get("artist") || "Slank";
+    const concertId = params.get("id");
+    const selectedTicket = params.get("ticket");
 
     const artistInput = document.getElementById("artist");
     const ticketType = document.getElementById("ticketType");
     const quantity = document.getElementById("quantity");
-
-    artistInput.value = artist;
+    const checkoutButton = document.getElementById("checkoutButton");
+    const cartStatus = document.getElementById("cartStatus");
+    let concert = null;
 
     function rupiah(number) {
-        return "Rp" + number.toLocaleString("id-ID");
+        return new Intl.NumberFormat("id-ID", {
+            style: "currency",
+            currency: "IDR",
+            maximumFractionDigits: 0
+        }).format(number);
     }
 
     function updateTotal() {
-        const price = Number(ticketType.value);
+        const priceColumns = {
+            Regular: "regular_price",
+            Festival: "festival_price",
+            VIP: "vip_price"
+        };
+        const price = concert
+            ? Number(concert[priceColumns[ticketType.value]])
+            : NaN;
         const qty = Math.max(1, Math.min(10, Number(quantity.value) || 1));
         quantity.value = qty;
 
-        document.getElementById("price").textContent = rupiah(price);
+        document.getElementById("price").textContent =
+            Number.isFinite(price) && price > 0 ? rupiah(price) : "-";
         document.getElementById("qty").textContent = qty;
-        document.getElementById("total").textContent = rupiah(price * qty);
+        document.getElementById("total").textContent =
+            Number.isFinite(price) && price > 0 ? rupiah(price * qty) : "-";
+        checkoutButton.disabled = !concert || !Number.isFinite(price) || price <= 0;
     }
 
     ticketType.addEventListener("change", updateTotal);
     quantity.addEventListener("input", updateTotal);
 
-    function checkout() {
+    async function loadConcert() {
+        if (!concertId) {
+            throw new Error("ID konser tidak ditemukan. Silakan pilih konser kembali.");
+        }
+
+        const { data, error } = await supabase
+            .from("concerts")
+            .select("id,title,artist,date,location,regular_price,festival_price,vip_price")
+            .eq("id", concertId)
+            .eq("is_active", true)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) {
+            throw new Error("Konser tidak ditemukan atau sudah tidak aktif.");
+        }
+
+        concert = data;
+        artistInput.value = `${concert.title} — ${concert.artist}`;
+        if (["Regular", "Festival", "VIP"].includes(selectedTicket)) {
+            ticketType.value = selectedTicket;
+        }
+        Array.from(ticketType.options).forEach(option => {
+            const priceColumn = {
+                Regular: "regular_price",
+                Festival: "festival_price",
+                VIP: "vip_price"
+            }[option.value];
+            const price = Number(concert[priceColumn]);
+            option.textContent = Number.isFinite(price) && price > 0
+                ? `${option.value} - ${rupiah(price)}`
+                : `${option.value} - Tidak tersedia`;
+        });
+
+        cartStatus.textContent = "";
+        updateTotal();
+    }
+
+    checkoutButton.addEventListener("click", () => {
+        if (!concert || checkoutButton.disabled) return;
+
+        const ticketPrice = Number(ticketType.value === "Regular"
+            ? concert.regular_price
+            : ticketType.value === "Festival"
+                ? concert.festival_price
+                : concert.vip_price);
         const order = {
-            artist: artist,
-            ticket: ticketType.options[ticketType.selectedIndex].text,
+            concert_id: concert.id,
+            concert_title: concert.title,
+            artist: concert.artist,
+            ticket_type: ticketType.value,
+            ticket: `${ticketType.value} - ${rupiah(ticketPrice)}`,
+            unit_price: ticketPrice,
             quantity: Number(quantity.value),
-            total: Number(ticketType.value) * Number(quantity.value)
+            total: ticketPrice * Number(quantity.value)
         };
 
         sessionStorage.setItem("livelyOrder", JSON.stringify(order));
         window.location.href = "checkout.html";
-    }
+    });
 
-    updateTotal();
+    loadConcert().catch(error => {
+        console.error("Cart concert load error:", error);
+        cartStatus.textContent =
+            error.message || "Data konser gagal dimuat. Silakan coba lagi.";
+        cartStatus.classList.add("text-danger");
+        checkoutButton.disabled = true;
+    });
 </script>
 
 </body>

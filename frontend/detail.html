@@ -23,6 +23,14 @@
             padding: 25px;
         }
 
+        .detail-poster {
+            width: 100%;
+            max-height: 390px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin-bottom: 22px;
+        }
+
         .ticket-option {
             display: block;
             width: 100%;
@@ -82,31 +90,31 @@
 <section class="detail-hero">
     <div class="container">
         <span class="gold">CONCERT DETAILS</span>
-        <h1 class="display-4 fw-bold mt-3" id="artistName">Nama Artis</h1>
-        <p class="text-secondary">Experience the music. Live the moment.</p>
+        <h1 class="display-4 fw-bold mt-3" id="concertTitle">Memuat konser...</h1>
+        <p class="text-secondary" id="concertArtist">Experience the music. Live the moment.</p>
     </div>
 </section>
 
 <section class="container py-5">
+    <p id="detailStatus" class="text-warning" role="status" aria-live="polite"></p>
     <div class="row g-4">
 
         <div class="col-lg-7">
             <div class="detail-card h-100">
                 <h3 class="gold mb-4">Informasi Konser</h3>
 
+                <img id="concertPoster" class="detail-poster" alt="" hidden>
+                <img id="posterFallback" class="detail-poster"
+                    src="images/cc.jpg" alt="Poster konser tidak tersedia" hidden>
+                <p><strong>Nama konser:</strong> <span id="concertTitleInfo">-</span></p>
                 <p><strong>Artis:</strong> <span id="artistInfo">-</span></p>
-                <p><strong>Tanggal:</strong> Akan diumumkan</p>
-                <p><strong>Lokasi:</strong> Akan diumumkan</p>
-                <p><strong>Genre:</strong> <span id="genreInfo">-</span></p>
+                <p><strong>Tanggal:</strong> <span id="concertDate">-</span></p>
+                <p><strong>Lokasi:</strong> <span id="concertLocation">-</span></p>
 
                 <hr class="border-secondary">
 
                 <h5>About the Concert</h5>
-                <p class="text-secondary">
-                    Nikmati pengalaman musik secara langsung bersama
-                    musisi favoritmu. Informasi jadwal dan lokasi resmi
-                    akan diperbarui segera.
-                </p>
+                <p class="text-secondary" id="concertDescription">-</p>
             </div>
         </div>
 
@@ -117,12 +125,12 @@
                 <button type="button"
                     class="ticket-option"
                     data-ticket="Regular"
-                    data-price="150000"
-                    aria-pressed="false">
+                    aria-pressed="false"
+                    disabled>
 
                     <div class="d-flex justify-content-between">
                         <strong>Regular</strong>
-                        <span class="gold">Rp150.000</span>
+                        <span class="gold ticket-price">Memuat...</span>
                     </div>
                     <small class="text-secondary">Akses area regular</small>
                 </button>
@@ -130,12 +138,12 @@
                 <button type="button"
                     class="ticket-option"
                     data-ticket="Festival"
-                    data-price="250000"
-                    aria-pressed="false">
+                    aria-pressed="false"
+                    disabled>
 
                     <div class="d-flex justify-content-between">
                         <strong>Festival</strong>
-                        <span class="gold">Rp250.000</span>
+                        <span class="gold ticket-price">Memuat...</span>
                     </div>
                     <small class="text-secondary">Akses area festival</small>
                 </button>
@@ -143,12 +151,12 @@
                 <button type="button"
                     class="ticket-option"
                     data-ticket="VIP"
-                    data-price="400000"
-                    aria-pressed="false">
+                    aria-pressed="false"
+                    disabled>
 
                     <div class="d-flex justify-content-between">
                         <strong>VIP</strong>
-                        <span class="gold">Rp400.000</span>
+                        <span class="gold ticket-price">Memuat...</span>
                     </div>
                     <small class="text-secondary">Akses area VIP</small>
                 </button>
@@ -165,7 +173,7 @@
                 </button>
 
                 <small class="text-secondary d-block mt-3">
-                    *Harga dan jadwal di atas masih berupa contoh.
+                    Harga tiket mengikuti data konser yang tersedia.
                 </small>
             </div>
         </div>
@@ -177,61 +185,150 @@
     © 2026 LIVELY. All Rights Reserved.
 </footer>
 
-<script>
+<script type="module">
+    import { supabase } from "./js/supabase.js";
+
     const params = new URLSearchParams(window.location.search);
-
-    const artist = params.get("artist") || "Slank";
-    const genre = params.get("genre") || "Rock";
-
-    document.getElementById("artistName").textContent = artist;
-    document.getElementById("artistInfo").textContent = artist;
-    document.getElementById("genreInfo").textContent = genre;
-    document.title = artist + " | LIVELY";
-
-    // Sistem pemilihan tiket
-    const ticketOptions = document.querySelectorAll(".ticket-option");
+    const concertId = params.get("id");
+    const status = document.getElementById("detailStatus");
+    const ticketOptions = Array.from(document.querySelectorAll(".ticket-option"));
     const orderButton = document.getElementById("orderButton");
     const selectedInfo = document.getElementById("selectedInfo");
-
     let selectedTicket = null;
+    let concert = null;
+
+    function formatRupiah(value) {
+        return new Intl.NumberFormat("id-ID", {
+            style: "currency",
+            currency: "IDR",
+            maximumFractionDigits: 0
+        }).format(Number(value));
+    }
+
+    function setUnavailable(message) {
+        status.textContent = message;
+        status.classList.add("text-danger");
+        orderButton.disabled = true;
+        ticketOptions.forEach(option => {
+            option.disabled = true;
+        });
+    }
+
+    function safeImageUrl(value) {
+        if (typeof value !== "string" || !value.trim()) return null;
+        try {
+            const url = new URL(value.trim(), window.location.href);
+            return url.protocol === "http:" || url.protocol === "https:"
+                ? url.href
+                : null;
+        } catch {
+            return null;
+        }
+    }
+
+    async function loadConcert() {
+        if (!concertId) {
+            setUnavailable("ID konser tidak ditemukan. Pilih konser dari daftar.");
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from("concerts")
+            .select("id,title,artist,date,location,description,poster_url,regular_price,festival_price,vip_price")
+            .eq("id", concertId)
+            .eq("is_active", true)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) {
+            setUnavailable("Konser tidak ditemukan atau sudah tidak aktif.");
+            return;
+        }
+
+        concert = data;
+        document.title = `${concert.title} | LIVELY`;
+        document.getElementById("concertTitle").textContent = concert.title;
+        document.getElementById("concertTitleInfo").textContent = concert.title;
+        document.getElementById("concertArtist").textContent = concert.artist;
+        document.getElementById("artistInfo").textContent = concert.artist;
+        const date = new Date(concert.date);
+        document.getElementById("concertDate").textContent =
+            Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("id-ID");
+        document.getElementById("concertLocation").textContent =
+            concert.location || "Lokasi belum tersedia";
+        document.getElementById("concertDescription").textContent =
+            concert.description || "Deskripsi belum tersedia.";
+
+        const posterUrl = safeImageUrl(concert.poster_url);
+        const poster = document.getElementById("concertPoster");
+        const posterFallback = document.getElementById("posterFallback");
+        const showPosterFallback = () => {
+            poster.hidden = true;
+            posterFallback.alt = `Poster ${concert.title} tidak tersedia`;
+            posterFallback.hidden = false;
+        };
+
+        if (posterUrl) {
+            poster.src = posterUrl;
+            poster.alt = `Poster ${concert.title}`;
+            poster.hidden = false;
+            poster.addEventListener("error", showPosterFallback, { once: true });
+        } else {
+            showPosterFallback();
+        }
+
+        const priceColumns = {
+            Regular: "regular_price",
+            Festival: "festival_price",
+            VIP: "vip_price"
+        };
+        ticketOptions.forEach(option => {
+            const price = Number(concert[priceColumns[option.dataset.ticket]]);
+            const priceElement = option.querySelector(".ticket-price");
+            if (!Number.isFinite(price) || price <= 0) {
+                priceElement.textContent = "Tidak tersedia";
+                option.disabled = true;
+                return;
+            }
+            option.dataset.price = String(price);
+            priceElement.textContent = formatRupiah(price);
+            option.disabled = false;
+        });
+
+        status.textContent = "";
+    }
 
     ticketOptions.forEach(option => {
-        option.addEventListener("click", function() {
-
-            // Hapus pilihan sebelumnya
+        option.addEventListener("click", () => {
+            if (option.disabled) return;
             ticketOptions.forEach(ticket => {
                 ticket.classList.remove("selected");
                 ticket.setAttribute("aria-pressed", "false");
             });
-
-            // Aktifkan pilihan baru
-            this.classList.add("selected");
-            this.setAttribute("aria-pressed", "true");
-
+            option.classList.add("selected");
+            option.setAttribute("aria-pressed", "true");
             selectedTicket = {
-                name: this.dataset.ticket,
-                price: Number(this.dataset.price)
+                name: option.dataset.ticket,
+                price: Number(option.dataset.price)
             };
-
             selectedInfo.textContent =
-                "Dipilih: " + selectedTicket.name +
-                " — Rp" + selectedTicket.price.toLocaleString("id-ID");
-
+                `Dipilih: ${selectedTicket.name} — ${formatRupiah(selectedTicket.price)}`;
             orderButton.disabled = false;
         });
     });
 
-    // Lanjut ke halaman keranjang
-    orderButton.addEventListener("click", function() {
-        if (!selectedTicket) return;
-
+    orderButton.addEventListener("click", () => {
+        if (!concert || !selectedTicket) return;
         const query = new URLSearchParams({
-            artist: artist,
-            genre: genre,
+            id: concert.id,
             ticket: selectedTicket.name
         });
+        window.location.href = `cart.html?${query.toString()}`;
+    });
 
-        window.location.href = "cart.html?" + query.toString();
+    loadConcert().catch(error => {
+        console.error("Concert detail load error:", error);
+        setUnavailable("Detail konser gagal dimuat. Silakan coba lagi.");
     });
 </script>
 

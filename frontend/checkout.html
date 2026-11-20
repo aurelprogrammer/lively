@@ -114,40 +114,422 @@
 <script type="module">
     import { supabase } from "./js/supabase.js";
 
-    const order = JSON.parse(
-        sessionStorage.getItem("livelyOrder") || "null"
-    );
+    const UUID_PATTERN =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const VALID_TICKET_TYPES = new Set(["Regular", "Festival", "VIP"]);
+
+    function readSessionJson(key) {
+        try {
+            const rawValue = sessionStorage.getItem(key);
+            return rawValue === null
+                ? { exists: false, value: null, error: null }
+                : { exists: true, value: JSON.parse(rawValue), error: null };
+        } catch (error) {
+            return { exists: true, value: null, error };
+        }
+    }
+
+    function validateOrder(value) {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+            return "Data pesanan tidak valid. Silakan pilih konser kembali.";
+        }
+
+        if (
+            typeof value.concert_id !== "string" ||
+            !UUID_PATTERN.test(value.concert_id)
+        ) {
+            return "ID konser tidak valid. Silakan pilih konser kembali.";
+        }
+
+        if (!VALID_TICKET_TYPES.has(value.ticket_type)) {
+            return "Jenis tiket tidak valid. Silakan pilih tiket kembali.";
+        }
+
+        if (
+            !Number.isInteger(value.quantity) ||
+            value.quantity < 1 ||
+            value.quantity > 10
+        ) {
+            return "Jumlah tiket harus antara 1 dan 10.";
+        }
+
+        return null;
+    }
+
+    function normalizeRpcResult(value, expectedQuantity) {
+        if (!value || typeof value !== "object") {
+            throw new Error("Data pesanan tidak ditemukan dari server.");
+        }
+
+        const unitPrice = Number(value.unit_price);
+        const total = Number(value.total);
+        const quantity = Number(value.quantity);
+
+        if (
+            typeof value.order_id !== "string" ||
+            !UUID_PATTERN.test(value.order_id) ||
+            typeof value.order_code !== "string" ||
+            !value.order_code.trim() ||
+            !Number.isSafeInteger(unitPrice) ||
+            unitPrice <= 0 ||
+            !Number.isSafeInteger(total) ||
+            total <= 0 ||
+            quantity !== expectedQuantity ||
+            total !== unitPrice * quantity
+        ) {
+            throw new Error("Data hasil pesanan dari server tidak valid.");
+        }
+
+        return {
+            order_id: value.order_id,
+            order_code: value.order_code,
+            unit_price: unitPrice,
+            total,
+            quantity
+        };
+    }
+
+    function validatePendingOrder(value) {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+            throw new Error("Data pemulihan pesanan tidak valid.");
+        }
+
+        const orderError = validateOrder(value.order);
+        if (orderError) throw new Error(orderError);
+
+        if (
+            typeof value.user_id !== "string" ||
+            !UUID_PATTERN.test(value.user_id)
+        ) {
+            throw new Error("Pengguna pemilik pesanan tidak valid.");
+        }
+
+        if (!value.buyer || typeof value.buyer !== "object") {
+            throw new Error("Data pembeli untuk pemulihan tidak valid.");
+        }
+
+        return {
+            ...value,
+            result: normalizeRpcResult(value.result, value.order.quantity)
+        };
+    }
+
+    const orderStorage = readSessionJson("livelyOrder");
+    const pendingStorage = readSessionJson("livelyPendingTicketOrder");
+    let order = orderStorage.value;
+    let pendingOrder = null;
+    let checkoutError = null;
+
+    if (pendingStorage.error) {
+        checkoutError =
+            "Data pemulihan pesanan rusak. Jangan buat pesanan baru; hubungi admin.";
+    } else if (pendingStorage.exists) {
+        try {
+            pendingOrder = validatePendingOrder(pendingStorage.value);
+        } catch (error) {
+            checkoutError =
+                error.message || "Data pemulihan pesanan tidak valid.";
+        }
+    }
+
+    if (!checkoutError && !pendingOrder) {
+        if (orderStorage.error) {
+            checkoutError =
+                "Data pesanan tidak dapat dibaca. Silakan pilih konser kembali.";
+        } else if (orderStorage.exists) {
+            checkoutError = validateOrder(order);
+        }
+    }
+
+    if (pendingOrder) {
+        order = pendingOrder.order;
+    }
 
     const form = document.getElementById("checkoutForm");
     const message = document.getElementById("checkoutMessage");
     const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
 
     const rupiah = number =>
         "Rp" + Number(number).toLocaleString("id-ID");
 
-    // Tampilkan ringkasan pesanan
-    if (!order) {
-        document.querySelector(".container.py-5").innerHTML = `
-            <div class="checkout-card text-center">
-                <h3 class="gold">Belum Ada Pesanan</h3>
-                <p class="text-secondary">
-                    Silakan pilih konser dan tiket terlebih dahulu.
-                </p>
-                <a href="concerts.html" class="btn btn-warning">
-                    Pilih Konser
-                </a>
-            </div>
-        `;
-    } else {
+    async function refreshOrderPrice() {
+        const { data: concert, error } = await supabase
+            .from("concerts")
+            .select("id,regular_price,festival_price,vip_price")
+            .eq("id", order.concert_id)
+            .eq("is_active", true)
+            .maybeSingle();
+
+        if (error) {
+            throw new Error(
+                `Harga konser terbaru gagal dimuat: ${error.message}`
+            );
+        }
+        if (!concert) {
+            throw new Error(
+                "Konser tidak ditemukan atau sudah tidak aktif. Checkout dihentikan."
+            );
+        }
+
+        const priceColumns = {
+            Regular: "regular_price",
+            Festival: "festival_price",
+            VIP: "vip_price"
+        };
+        const unitPrice = Number(concert[priceColumns[order.ticket_type]]);
+        const total = unitPrice * order.quantity;
+
+        if (
+            !Number.isSafeInteger(unitPrice) ||
+            unitPrice <= 0 ||
+            !Number.isSafeInteger(total) ||
+            total <= 0
+        ) {
+            throw new Error(
+                `Harga tiket ${order.ticket_type} tidak valid atau tidak tersedia.`
+            );
+        }
+
+        order.unit_price = unitPrice;
+        order.total = total;
+        order.ticket = `${order.ticket_type} - ${rupiah(unitPrice)}`;
+    }
+
+    function normalizeTickets(tickets, expectedQuantity) {
+        if (!Array.isArray(tickets) || tickets.length !== expectedQuantity) {
+            throw new Error("Jumlah tiket yang dibuat belum sesuai pesanan.");
+        }
+
+        const ticketsAreValid = tickets.every(ticket =>
+            ticket &&
+            typeof ticket.id === "string" &&
+            UUID_PATTERN.test(ticket.id) &&
+            typeof ticket.ticket_code === "string" &&
+            ticket.ticket_code.trim().length > 0 &&
+            typeof ticket.qr_token === "string" &&
+            UUID_PATTERN.test(ticket.qr_token) &&
+            typeof ticket.ticket_status === "string" &&
+            ticket.ticket_status.trim().length > 0
+        );
+
+        if (!ticketsAreValid) {
+            throw new Error("Data tiket atau QR yang diterima tidak lengkap.");
+        }
+
+        return tickets;
+    }
+
+    async function fetchTickets(orderId, expectedQuantity) {
+        const { data: tickets, error } = await supabase
+            .from("tickets")
+            .select("id, ticket_code, qr_token, ticket_status")
+            .eq("order_id", orderId);
+
+        if (error) throw error;
+        return normalizeTickets(tickets, expectedQuantity);
+    }
+
+    let receiptPendingStorage = null;
+
+    function savePendingReceipt() {
+        if (!receiptPendingStorage) {
+            throw new Error("Data struk untuk disimpan tidak tersedia.");
+        }
+
+        try {
+            sessionStorage.setItem(
+                "livelyReceipt",
+                JSON.stringify(receiptPendingStorage)
+            );
+        } catch (error) {
+            const storageError = new Error(
+                "Struk belum dapat disimpan. Pesanan sudah dibuat; jangan membuat pesanan baru."
+            );
+            storageError.name = "ReceiptStorageError";
+            throw storageError;
+        }
+
+        try {
+            sessionStorage.removeItem("livelyPendingTicketOrder");
+            sessionStorage.removeItem("livelyOrder");
+        } catch (error) {
+            console.warn("Checkout storage cleanup error:", error);
+        }
+
+        window.location.href = "success.html";
+    }
+
+    function addReceiptRetryButton() {
+        if (document.getElementById("retryReceiptSaveButton")) return;
+
+        const retryButton = document.createElement("button");
+        retryButton.id = "retryReceiptSaveButton";
+        retryButton.type = "button";
+        retryButton.className = "btn btn-outline-light w-100 mt-2";
+        retryButton.textContent = "Coba Simpan Struk Lagi";
+        let isSavingReceipt = false;
+
+        retryButton.addEventListener("click", () => {
+            if (isSavingReceipt) return;
+
+            isSavingReceipt = true;
+            retryButton.disabled = true;
+
+            try {
+                savePendingReceipt();
+            } catch (error) {
+                console.error("Receipt save retry error:", error);
+                message.textContent =
+                    error.message || "Struk gagal disimpan. Silakan coba lagi.";
+                message.className = "mt-3 mb-0 text-danger";
+                isSavingReceipt = false;
+                retryButton.disabled = false;
+            }
+        });
+
+        message.insertAdjacentElement("afterend", retryButton);
+    }
+
+    function createReceipt(pending, tickets) {
+        const result = pending.result;
+
+        return {
+            ...pending.order,
+            ...pending.buyer,
+            ticket: `${pending.order.ticket_type} - ${rupiah(result.unit_price)}`,
+            orderId: result.order_code,
+            order_id: result.order_id,
+            unit_price: result.unit_price,
+            total: result.total,
+            quantity: result.quantity,
+            status: "SIMULASI BERHASIL",
+            tickets
+        };
+    }
+
+    async function finishPendingOrder(pending) {
+        const tickets = await fetchTickets(
+            pending.result.order_id,
+            pending.result.quantity
+        );
+        receiptPendingStorage = createReceipt(pending, tickets);
+        savePendingReceipt();
+    }
+
+    function addTicketRetryButton(pending) {
+        if (document.getElementById("retryTicketLoadButton")) return;
+
+        const retryButton = document.createElement("button");
+        retryButton.id = "retryTicketLoadButton";
+        retryButton.type = "button";
+        retryButton.className = "btn btn-outline-light w-100 mt-2";
+        retryButton.textContent = "Coba muat tiket untuk pesanan ini";
+        retryButton.addEventListener("click", async () => {
+            retryButton.disabled = true;
+
+            try {
+                const { data, error } = await supabase.auth.getUser();
+                if (error) throw error;
+                if (!data.user || data.user.id !== pending.user_id) {
+                    throw new Error(
+                        "Login dengan akun pemilik pesanan untuk memuat tiket."
+                    );
+                }
+
+                await finishPendingOrder(pending);
+            } catch (error) {
+                console.error("Ticket recovery error:", error);
+                if (error.name === "ReceiptStorageError") {
+                    retryButton.remove();
+                    message.textContent =
+                        `Pesanan sudah dibuat (ID: ${pending.result.order_id}) ` +
+                        "dan tiket sudah dimuat, tetapi struk belum tersimpan. " +
+                        "Jangan membuat pesanan baru.";
+                    message.className = "mt-3 mb-0 text-danger";
+                    addReceiptRetryButton();
+                    return;
+                }
+
+                message.textContent =
+                    error.message || "Tiket gagal dimuat. Coba lagi.";
+                message.className = "mt-3 mb-0 text-danger";
+                retryButton.disabled = false;
+            }
+        });
+
+        message.insertAdjacentElement("afterend", retryButton);
+    }
+
+    function renderOrderSummary() {
+        if (checkoutError) {
+            submitButton.disabled = true;
+            submitButton.textContent = "Buat Pesanan";
+            message.textContent = checkoutError;
+            message.className = "mt-3 mb-0 text-danger";
+
+            if (order) {
+                document.getElementById("summaryArtist").textContent =
+                    order.artist || "-";
+                document.getElementById("summaryTicket").textContent =
+                    order.ticket_type || "-";
+                document.getElementById("summaryQty").textContent =
+                    order.quantity;
+                document.getElementById("summaryTotal").textContent = "-";
+            }
+            return;
+        }
+
+        if (!order) {
+            submitButton.disabled = true;
+            document.querySelector(".container.py-5").innerHTML = `
+                <div class="checkout-card text-center">
+                    <h3 class="gold">Belum Ada Pesanan</h3>
+                    <p class="text-secondary">
+                        Silakan pilih konser dan tiket terlebih dahulu.
+                    </p>
+                    <a href="concerts.html" class="btn btn-warning">
+                        Pilih Konser
+                    </a>
+                </div>
+            `;
+            return;
+        }
+
+        const confirmedPrice = pendingOrder
+            ? pendingOrder.result.unit_price
+            : order.unit_price;
+        const confirmedTotal = pendingOrder
+            ? pendingOrder.result.total
+            : order.total;
+        const confirmedQuantity = pendingOrder
+            ? pendingOrder.result.quantity
+            : order.quantity;
+
         document.getElementById("summaryArtist").textContent = order.artist;
-        document.getElementById("summaryTicket").textContent = order.ticket;
-        document.getElementById("summaryQty").textContent = order.quantity;
+        document.getElementById("summaryTicket").textContent =
+            `${order.ticket_type} - ${rupiah(confirmedPrice)}`;
+        document.getElementById("summaryQty").textContent = confirmedQuantity;
         document.getElementById("summaryTotal").textContent =
-            rupiah(order.total);
+            rupiah(confirmedTotal);
+
+        if (pendingOrder) {
+            submitButton.disabled = true;
+            message.textContent =
+                `Pesanan sudah dibuat (ID: ${pendingOrder.result.order_id}), ` +
+                "tetapi data tiket belum dimuat. Gunakan tombol pemulihan; " +
+                "jangan membuat pesanan baru.";
+            message.className = "mt-3 mb-0 text-warning";
+        }
     }
 
     // Periksa sesi login
     async function checkLogin() {
+        if (checkoutError || !order) {
+            submitButton.disabled = true;
+            return false;
+        }
+
         const { data, error } = await supabase.auth.getUser();
 
         if (error || !data.user) {
@@ -161,26 +543,79 @@
             return false;
         }
 
-        submitButton.disabled = false;
-
         // Isi email otomatis jika tersedia
         document.getElementById("buyerEmail").value =
             data.user.email || "";
 
+        if (pendingOrder) {
+            if (data.user.id !== pendingOrder.user_id) {
+                message.textContent =
+                    "Login dengan akun pemilik pesanan untuk memuat tiket.";
+                message.className = "mt-3 mb-0 text-danger";
+                submitButton.disabled = true;
+                return false;
+            }
+
+            submitButton.disabled = true;
+            addTicketRetryButton(pendingOrder);
+            return true;
+        }
+
+        submitButton.disabled = false;
         return true;
     }
 
-    checkLogin();
+    async function initializeCheckout() {
+        if (!checkoutError && order && !pendingOrder) {
+            try {
+                await refreshOrderPrice();
+            } catch (error) {
+                console.error("Checkout price refresh error:", error);
+                checkoutError =
+                    error.message ||
+                    "Harga konser terbaru gagal dimuat. Checkout dihentikan.";
+            }
+        }
+
+        renderOrderSummary();
+
+        try {
+            await checkLogin();
+        } catch (error) {
+            console.error("Checkout session check error:", error);
+            submitButton.disabled = true;
+            message.textContent =
+                "Status login tidak dapat diperiksa. Silakan muat ulang halaman.";
+            message.className = "mt-3 mb-0 text-danger";
+        }
+    }
+
+    initializeCheckout();
 
     // Proses pesanan simulasi
+    let isSubmitting = false;
+
     form.addEventListener("submit", async function(event) {
         event.preventDefault();
 
-        if (!order) return;
+        if (isSubmitting) return;
+        if (checkoutError || !order || pendingOrder) {
+            submitButton.disabled = true;
+            if (checkoutError) {
+                message.textContent = checkoutError;
+                message.className = "mt-3 mb-0 text-danger";
+            }
+            return;
+        }
 
+        isSubmitting = true;
         submitButton.disabled = true;
         submitButton.textContent = "Memproses...";
         message.textContent = "Sedang membuat pesanan simulasi...";
+        let rpcSucceeded = false;
+        let returnedOrderId = null;
+        let pendingStorageError = false;
+        let submittingUserId = null;
 
         try {
             const { data: authData, error: authError } =
@@ -190,6 +625,31 @@
                 throw new Error("Silakan login terlebih dahulu.");
             }
 
+            submittingUserId = authData.user.id;
+
+            const displayedUnitPrice = order.unit_price;
+            try {
+                await refreshOrderPrice();
+            } catch (priceError) {
+                checkoutError =
+                    priceError.message ||
+                    "Harga konser terbaru gagal dimuat. Checkout dihentikan.";
+                renderOrderSummary();
+                isSubmitting = false;
+                return;
+            }
+
+            if (order.unit_price !== displayedUnitPrice) {
+                renderOrderSummary();
+                message.textContent =
+                    "Harga tiket telah diperbarui. Periksa total terbaru sebelum melanjutkan.";
+                message.className = "mt-3 mb-0 text-warning";
+                submitButton.disabled = false;
+                submitButton.textContent = "Buat Pesanan";
+                isSubmitting = false;
+                return;
+            }
+
             const buyer = {
                 name: document.getElementById("buyerName").value.trim(),
                 email: document.getElementById("buyerEmail").value.trim(),
@@ -197,73 +657,140 @@
                 payment: document.getElementById("paymentMethod").value
             };
 
-            // Panggil function Supabase
             const { data, error } = await supabase.rpc(
-                "create_demo_order",
+                "create_demo_order_v2",
                 {
                     p_buyer_name: buyer.name,
                     p_buyer_email: buyer.email,
                     p_buyer_phone: buyer.phone,
-                    p_artist: order.artist,
-                    p_ticket_type: order.ticket,
-                    p_quantity: Number(order.quantity),
+                    p_concert_id: order.concert_id,
+                    p_ticket_type: order.ticket_type,
+                    p_quantity: order.quantity,
                     p_payment_method: buyer.payment
                 }
             );
 
             if (error) throw error;
 
-            const result = Array.isArray(data) ? data[0] : data;
-
-            if (!result) {
-                throw new Error("Data pesanan tidak ditemukan.");
+            rpcSucceeded = true;
+            const rawResult = Array.isArray(data) ? data[0] : data;
+            if (
+                rawResult &&
+                typeof rawResult.order_id === "string" &&
+                UUID_PATTERN.test(rawResult.order_id)
+            ) {
+                returnedOrderId = rawResult.order_id;
             }
 
-            // Ambil tiket yang dibuat oleh function
-            const { data: tickets, error: ticketError } =
-                await supabase
-                    .from("tickets")
-                    .select("ticket_code, qr_token, ticket_status")
-                    .eq("order_id", result.order_id);
+            const result = normalizeRpcResult(rawResult, order.quantity);
+            pendingOrder = {
+                user_id: authData.user.id,
+                order,
+                buyer,
+                result
+            };
 
-            // Simpan struk simulasi untuk halaman sukses
-            if (ticketError) {
-    throw ticketError;
-}
+            try {
+                sessionStorage.setItem(
+                    "livelyPendingTicketOrder",
+                    JSON.stringify(pendingOrder)
+                );
+            } catch (storageError) {
+                pendingStorageError = true;
+                console.error("Pending order storage error:", storageError);
+                try {
+                    sessionStorage.removeItem("livelyOrder");
+                } catch (removeError) {
+                    console.error("Order cleanup error:", removeError);
+                }
+                message.textContent =
+                    `Pesanan sudah dibuat (ID: ${pendingOrder.result.order_id}), ` +
+                    "tetapi data pemulihan tidak tersimpan. Pemulihan otomatis " +
+                    "setelah halaman ditutup tidak tersedia; jangan membuat pesanan baru.";
+                message.className = "mt-3 mb-0 text-warning";
+            }
 
-if (!tickets || tickets.length !== Number(result.quantity)) {
-    throw new Error("Data tiket belum berhasil dimuat.");
-}
-
-            const receipt = {
-    ...order,
-    ...buyer,
-    orderId: result.order_code,
-    order_id: result.order_id,
-    unit_price: result.unit_price,
-    total: result.total,
-    quantity: result.quantity,
-    status: "SIMULASI BERHASIL",
-    tickets: tickets
-};
-
-            sessionStorage.setItem(
-                "livelyReceipt",
-                JSON.stringify(receipt)
-            );
-
-            window.location.href = "success.html";
+            await finishPendingOrder(pendingOrder);
 
         } catch (error) {
             console.error("Checkout error:", error);
 
-            message.textContent =
-                error.message || "Terjadi kesalahan saat membuat pesanan.";
+            if (pendingOrder) {
+                submitButton.disabled = true;
+                submitButton.textContent = "Pesanan sudah dibuat";
 
-            message.className = "mt-3 mb-0 text-danger";
+                if (error.name === "ReceiptStorageError") {
+                    message.textContent =
+                        `Pesanan sudah dibuat (ID: ${pendingOrder.result.order_id}) ` +
+                        "dan tiket sudah dimuat, tetapi struk belum tersimpan. " +
+                        "Gunakan tombol di bawah; jangan membuat pesanan baru.";
+                    message.className = "mt-3 mb-0 text-danger";
+                    addReceiptRetryButton();
+                } else if (pendingStorageError) {
+                    message.textContent =
+                        `Pesanan sudah dibuat (ID: ${pendingOrder.result.order_id}), ` +
+                        `tetapi tiket belum berhasil dimuat. ${error.message || ""} ` +
+                        "Data pemulihan tidak tersimpan; pertahankan halaman ini dan " +
+                        "jangan membuat pesanan baru.";
+                    message.className = "mt-3 mb-0 text-danger";
+                    addTicketRetryButton(pendingOrder);
+                } else {
+                    message.textContent =
+                        `Pesanan sudah dibuat (ID: ${pendingOrder.result.order_id}), ` +
+                        `tetapi tiket belum berhasil dimuat. ${error.message || ""} ` +
+                        "Gunakan tombol pemulihan; jangan membuat pesanan baru.";
+                    message.className = "mt-3 mb-0 text-danger";
+                    addTicketRetryButton(pendingOrder);
+                }
+            } else if (rpcSucceeded) {
+                submitButton.disabled = true;
+                submitButton.textContent = "Periksa status pesanan";
+                message.textContent =
+                    "RPC berhasil merespons, tetapi datanya tidak lengkap. " +
+                    `Jangan kirim ulang pesanan. Order ID: ${returnedOrderId || "tidak tersedia"}.`;
+                message.className = "mt-3 mb-0 text-danger";
+            } else {
+                let currentUser = null;
+                let sessionCheckError = null;
 
-            submitButton.disabled = false;
-            submitButton.textContent = "Buat Pesanan";
+                try {
+                    const { data: currentAuthData, error: currentAuthError } =
+                        await supabase.auth.getUser();
+
+                    if (currentAuthError) throw currentAuthError;
+                    currentUser = currentAuthData.user;
+                } catch (checkError) {
+                    sessionCheckError = checkError;
+                    console.error("Session recheck error:", checkError);
+                }
+
+                if (sessionCheckError) {
+                    submitButton.disabled = true;
+                    submitButton.textContent = "Periksa sesi login";
+                    message.textContent =
+                        "RPC gagal sebelum pesanan terkonfirmasi, tetapi status login " +
+                        "tidak dapat dipastikan. Tombol tetap nonaktif; periksa sesi " +
+                        "sebelum mencoba kembali.";
+                    message.className = "mt-3 mb-0 text-danger";
+                } else if (
+                    !currentUser ||
+                    (submittingUserId && currentUser.id !== submittingUserId)
+                ) {
+                    submitButton.disabled = true;
+                    submitButton.textContent = "Login diperlukan";
+                    message.textContent =
+                        "RPC gagal sebelum pesanan dibuat dan sesi login tidak valid. " +
+                        "Silakan login kembali; tombol tetap nonaktif.";
+                    message.className = "mt-3 mb-0 text-danger";
+                } else {
+                    isSubmitting = false;
+                    message.textContent =
+                        error.message || "RPC gagal membuat pesanan.";
+                    message.className = "mt-3 mb-0 text-danger";
+                    submitButton.disabled = false;
+                    submitButton.textContent = "Buat Pesanan";
+                }
+            }
         }
     });
 </script>

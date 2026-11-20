@@ -78,117 +78,13 @@
     </div>
 
     <div class="concert-filters">
-        <button class="filter-btn active" data-filter="all">All</button>
-        <button class="filter-btn" data-filter="rock">Rock</button>
-        <button class="filter-btn" data-filter="pop">Pop</button>
-        <button class="filter-btn" data-filter="indie">Indie</button>
+        <span class="filter-btn active">Semua konser aktif</span>
     </div>
 
-    <div class="row g-4 mt-2" id="concertList">
-
-        <div class="col-md-6 col-lg-4 concert-item" data-category="rock" data-name="slank">
-            <div class="concert-card">
-                <div class="concert-image">
-                    <img src="images/slank.jpg" alt="Slank tampil di panggung" class="concert-img">
-                </div>
-                <div class="concert-info">
-                    <small>ROCK MUSIC</small>
-                    <h5>Slank Live Concert</h5>
-                    <p>Informasi lokasi dan jadwal segera diumumkan.</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Coming Soon</strong>
-                        <a href="detail.html?artist=Slank&genre=Rock" class="card-link">Get Ticket ↗</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 col-lg-4 concert-item" data-category="rock" data-name="iwan fals">
-            <div class="concert-card">
-                <div class="concert-image">
-                    <img src="images/idolguaiwan.jpg" alt="Iwan Fals tampil di panggung" class="concert-img">
-                </div>
-                <div class="concert-info">
-                    <small>INDONESIAN MUSIC</small>
-                    <h5>Iwan Fals Live</h5>
-                    <p>Informasi lokasi dan jadwal segera diumumkan.</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Coming Soon</strong>
-                        <a href="detail.html?artist=Iwan%20Fals&genre=Rock" class="card-link">Get Ticket ↗</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 col-lg-4 concert-item" data-category="pop" data-name="tangga">
-            <div class="concert-card">
-                <div class="concert-image">
-                    <img src="images/tangga%20jpg.jpg" alt="Grup Tangga" class="concert-img">
-                </div>
-                <div class="concert-info">
-                    <small>POP MUSIC</small>
-                    <h5>Tangga Live Show</h5>
-                    <p>Informasi lokasi dan jadwal segera diumumkan.</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Coming Soon</strong>
-                        <a href="detail.html?artist=Tangga&genre=Pop" class="card-link">Get Ticket ↗</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 col-lg-4 concert-item" data-category="indie" data-name="perunggu">
-            <div class="concert-card">
-                <div class="concert-image">
-                    <img src="images/emasituperunggu.jpg" alt="Grup Perunggu" class="concert-img">
-                </div>
-                <div class="concert-info">
-                    <small>INDIE MUSIC</small>
-                    <h5>Perunggu Live Show</h5>
-                    <p>Informasi lokasi dan jadwal segera diumumkan.</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Coming Soon</strong>
-                        <a href="detail.html?artist=Perunggu&genre=Indie" class="card-link">Get Ticket ↗</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 col-lg-4 concert-item" data-category="pop" data-name="ten2five">
-            <div class="concert-card">
-                <div class="concert-image">
-                    <img src="images/ten2five.jpg.jpg" alt="Ten2Five tampil di panggung" class="concert-img">
-                </div>
-                <div class="concert-info">
-                    <small>POP MUSIC</small>
-                    <h5>Ten2Five Live</h5>
-                    <p>Informasi lokasi dan jadwal segera diumumkan.</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Coming Soon</strong>
-                        <a href="detail.html?artist=Ten2Five&genre=Pop" class="card-link">Get Ticket ↗</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 col-lg-4 concert-item" data-category="rock" data-name="naif">
-            <div class="concert-card">
-                <div class="concert-image">
-                    <img src="images/naif.jpg.jpg" alt="Grup Naif" class="concert-img">
-                </div>
-                <div class="concert-info">
-                    <small>ALTERNATIVE ROCK</small>
-                    <h5>Naif Live Concert</h5>
-                    <p>Informasi lokasi dan jadwal segera diumumkan.</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Coming Soon</strong>
-                        <a href="detail.html?artist=Naif&genre=Rock" class="card-link">Get Ticket ↗</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </div>
+    <p id="concertListStatus" class="text-secondary mt-3" role="status" aria-live="polite">
+        Memuat konser aktif...
+    </p>
+    <div class="row g-4 mt-2" id="concertList"></div>
 
     <p id="noConcert" class="text-center py-5" hidden>
         Concert tidak ditemukan.
@@ -204,5 +100,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script type="module" src="js/script.js"></script>
+<script type="module" src="js/concert-list.js"></script>
 </body>
 </html>

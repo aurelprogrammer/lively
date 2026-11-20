@@ -114,55 +114,12 @@
         </div>
         <a href="concerts.html" class="view-all">View All Concerts ↗</a>
     </div>
-    <div class="row g-4 mt-2">
-        <div class="col-md-4">
-            <div class="concert-card">
-                <div class="concert-image">
-                    <img src="images/slank.jpg" alt="Slank tampil di panggung" class="concert-img">
-                </div>
-                <div class="concert-info">
-                    <small>ROCK MUSIC</small>
-                    <h5>Slank Live Concert</h5>
-                    <p>Jakarta, Indonesia</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Coming Soon</strong>
-                        <a href="concerts.html" class="card-link">Details ↗</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="concert-card">
-                <div class="concert-image">
-                    <img src="images/idolguaiwan.jpg" alt="Iwan Fals tampil di panggung" class="concert-img">
-                </div>
-                <div class="concert-info">
-                    <small>INDONESIAN MUSIC</small>
-                    <h5>Iwan Fals Live</h5>
-                    <p>Bandung, Indonesia</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Coming Soon</strong>
-                        <a href="concerts.html" class="card-link">Details ↗</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="concert-card">
-                <div class="concert-image">
-                    <img src="images/emasituperunggu.jpg" alt="Grup Perunggu" class="concert-img">
-                </div>
-                <div class="concert-info">
-                    <small>INDIE MUSIC</small>
-                    <h5>Perunggu Live Show</h5>
-                    <p>Yogyakarta, Indonesia</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Coming Soon</strong>
-                        <a href="concerts.html" class="card-link">Details ↗</a>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <p id="featuredConcertStatus" class="text-secondary mt-3" role="status" aria-live="polite">
+        Memuat konser aktif...
+    </p>
+    <div class="row g-4 mt-2" id="featuredConcertList"></div>
+    <div class="text-center mt-4">
+        <a href="concerts.html" class="btn btn-outline-dark rounded-pill px-4">Lihat semua konser</a>
     </div>
 </section>
 
@@ -184,5 +141,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script type="module" src="js/script.js"></script>
+<script type="module" src="js/concert-list.js"></script>
 </body>
 </html>
