@@ -227,17 +227,25 @@
                     .eq("order_id", result.order_id);
 
             // Simpan struk simulasi untuk halaman sukses
+            if (ticketError) {
+    throw ticketError;
+}
+
+if (!tickets || tickets.length !== Number(result.quantity)) {
+    throw new Error("Data tiket belum berhasil dimuat.");
+}
+
             const receipt = {
-                ...order,
-                ...buyer,
-                orderId: result.order_code,
-                order_id: result.order_id,
-                unit_price: result.unit_price,
-                total: result.total,
-                quantity: result.quantity,
-                status: "SIMULASI BERHASIL",
-                tickets: ticketError ? [] : tickets
-            };
+    ...order,
+    ...buyer,
+    orderId: result.order_code,
+    order_id: result.order_id,
+    unit_price: result.unit_price,
+    total: result.total,
+    quantity: result.quantity,
+    status: "SIMULASI BERHASIL",
+    tickets: tickets
+};
 
             sessionStorage.setItem(
                 "livelyReceipt",

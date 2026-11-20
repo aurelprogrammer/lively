@@ -27,6 +27,14 @@
 </head>
 <body>
 
+<div id="adminAuthStatus" class="container py-5 text-center" role="status" aria-live="polite">
+    <div class="panel mx-auto" style="max-width: 520px;">
+        <h4 class="gold">Memeriksa akses admin...</h4>
+        <p class="text-secondary mb-0">Mohon tunggu sebentar.</p>
+    </div>
+</div>
+
+<div id="adminDashboard" class="d-none">
 <div class="container-fluid">
 <div class="row">
 
@@ -50,7 +58,7 @@
                 <div class="col-md-4">
                     <div class="panel">
                         <p class="text-secondary">Total Konser</p>
-                        <div class="stat-number gold" id="totalConcerts">6</div>
+                        <div class="stat-number gold" id="totalConcerts">0</div>
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -74,31 +82,72 @@
             </div>
 
             <div class="panel mb-4">
+                <h4 id="concertFormTitle" class="gold mb-4">Tambah Konser</h4>
                 <form id="concertForm" class="row g-3">
-                    <div class="col-md-5">
-                        <input id="concertName" class="form-control" placeholder="Nama artis / konser" required>
+                    <div class="col-md-6">
+                        <label for="concertTitle" class="form-label">Nama Konser</label>
+                        <input id="concertTitle" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="concertArtist" class="form-label">Nama Artis</label>
+                        <input id="concertArtist" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="concertDate" class="form-label">Tanggal dan Waktu</label>
+                        <input id="concertDate" type="datetime-local" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="concertLocation" class="form-label">Lokasi</label>
+                        <input id="concertLocation" class="form-control" required>
+                    </div>
+                    <div class="col-12">
+                        <label for="concertDescription" class="form-label">Deskripsi</label>
+                        <textarea id="concertDescription" class="form-control" rows="3" required></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label for="concertPosterUrl" class="form-label">URL Poster</label>
+                        <input id="concertPosterUrl" type="url" class="form-control" required>
                     </div>
                     <div class="col-md-4">
-                        <select id="concertGenre" class="form-select">
-                            <option>Rock</option>
-                            <option>Pop</option>
-                            <option>Indie</option>
-                            <option>Jazz</option>
-                        </select>
+                        <label for="regularPrice" class="form-label">Harga Regular</label>
+                        <input id="regularPrice" type="number" class="form-control" min="0.01" step="any" required>
                     </div>
-                    <div class="col-md-3">
-                        <button class="btn btn-gold w-100">Tambah Konser</button>
+                    <div class="col-md-4">
+                        <label for="festivalPrice" class="form-label">Harga Festival</label>
+                        <input id="festivalPrice" type="number" class="form-control" min="0.01" step="any" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="vipPrice" class="form-label">Harga VIP</label>
+                        <input id="vipPrice" type="number" class="form-control" min="0.01" step="any" required>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input id="concertIsActive" type="checkbox" class="form-check-input" checked>
+                            <label for="concertIsActive" class="form-check-label">Konser aktif</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <button id="concertSubmitButton" type="submit" class="btn btn-gold w-100">Tambah Konser</button>
+                    </div>
+                    <div class="col-md-4">
+                        <button id="cancelConcertEdit" type="button" class="btn btn-outline-light w-100 d-none">Batal Edit</button>
                     </div>
                 </form>
+                <p id="concertMessage" class="mt-3 mb-0" role="status" aria-live="polite"></p>
             </div>
 
             <div class="panel">
+                <p id="concertListStatus" class="text-secondary" role="status" aria-live="polite">Menunggu verifikasi admin...</p>
                 <div class="table-responsive">
                     <table class="table align-middle">
                         <thead>
                             <tr>
                                 <th>Nama Konser</th>
-                                <th>Genre</th>
+                                <th>Artis</th>
+                                <th>Tanggal</th>
+                                <th>Lokasi</th>
+                                <th>Harga Tiket</th>
+                                <th>Status</th>
                                 <th>Aksi</th>
                             </tr>
                         </thead>
@@ -137,69 +186,15 @@
     </main>
 </div>
 </div>
+</div>
 
 <script>
-    const defaultConcerts = [
-        {name:"Slank", genre:"Rock"},
-        {name:"Iwan Fals", genre:"Rock"},
-        {name:"Tangga", genre:"Pop"},
-        {name:"Perunggu", genre:"Indie"},
-        {name:"Ten2Five", genre:"Pop"},
-        {name:"Naif", genre:"Rock"}
-    ];
-
-    let concerts = JSON.parse(localStorage.getItem("livelyConcerts") || "null") || defaultConcerts;
-
-    function saveConcerts() {
-        localStorage.setItem("livelyConcerts", JSON.stringify(concerts));
-    }
-
-    function renderConcerts() {
-        const table = document.getElementById("concertTable");
-        table.innerHTML = "";
-
-        concerts.forEach((concert, index) => {
-            table.innerHTML += `
-                <tr>
-                    <td>${escapeHTML(concert.name)}</td>
-                    <td>${escapeHTML(concert.genre)}</td>
-                    <td>
-                        <button class="btn btn-sm btn-danger" onclick="deleteConcert(${index})">
-                            Hapus
-                        </button>
-                    </td>
-                </tr>`;
-        });
-
-        document.getElementById("totalConcerts").textContent = concerts.length;
-    }
-
     function escapeHTML(value) {
         return String(value).replace(/[&<>"']/g, char => ({
             "&":"&amp;", "<":"&lt;", ">":"&gt;",
             '"':"&quot;", "'":"&#39;"
         })[char]);
     }
-
-    function deleteConcert(index) {
-        if (!confirm("Hapus konser ini?")) return;
-        concerts.splice(index, 1);
-        saveConcerts();
-        renderConcerts();
-    }
-
-    document.getElementById("concertForm").addEventListener("submit", function(event) {
-        event.preventDefault();
-
-        concerts.push({
-            name: document.getElementById("concertName").value.trim(),
-            genre: document.getElementById("concertGenre").value
-        });
-
-        saveConcerts();
-        renderConcerts();
-        this.reset();
-    });
 
     const receipt = JSON.parse(sessionStorage.getItem("livelyReceipt") || "null");
     const orderTable = document.getElementById("orderTable");
@@ -218,8 +213,392 @@
         document.getElementById("totalRevenue").textContent =
             "Rp" + Number(receipt.total).toLocaleString("id-ID");
     }
+</script>
 
-    renderConcerts();
+<script type="module">
+    import { supabase } from "./js/supabase.js";
+
+    const status = document.getElementById("adminAuthStatus");
+    const dashboard = document.getElementById("adminDashboard");
+
+    const concertForm = document.getElementById("concertForm");
+    const concertTable = document.getElementById("concertTable");
+    const concertListStatus = document.getElementById("concertListStatus");
+    const concertMessage = document.getElementById("concertMessage");
+    const concertSubmitButton = document.getElementById("concertSubmitButton");
+    const cancelConcertEdit = document.getElementById("cancelConcertEdit");
+    const totalConcerts = document.getElementById("totalConcerts");
+    const concertFormTitle = document.getElementById("concertFormTitle");
+
+    let editingConcertId = null;
+    let isSavingConcert = false;
+
+    function setConcertMessage(message, type) {
+        concertMessage.textContent = message;
+        concertMessage.className = "mt-3 mb-0";
+        if (type) concertMessage.classList.add(`text-${type}`);
+    }
+
+    function formatRupiah(value) {
+        return new Intl.NumberFormat("id-ID", {
+            style: "currency",
+            currency: "IDR",
+            maximumFractionDigits: 0
+        }).format(Number(value));
+    }
+
+    function formatConcertDate(value) {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime())
+            ? "Tanggal tidak valid"
+            : date.toLocaleString("id-ID");
+    }
+
+    function toDateTimeLocal(value) {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        const localDate = new Date(
+            date.getTime() - date.getTimezoneOffset() * 60000
+        );
+        return localDate.toISOString().slice(0, 16);
+    }
+
+    function showConcertTableMessage(message) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 7;
+        cell.className = "text-center text-secondary";
+        cell.textContent = message;
+        row.appendChild(cell);
+        concertTable.replaceChildren(row);
+    }
+
+    function renderConcerts(concerts) {
+        concertTable.replaceChildren();
+        totalConcerts.textContent = String(concerts.length);
+
+        if (concerts.length === 0) {
+            showConcertTableMessage("Belum ada data konser.");
+            return;
+        }
+
+        concerts.forEach(concert => {
+            const row = document.createElement("tr");
+            const titleCell = document.createElement("td");
+            const artistCell = document.createElement("td");
+            const dateCell = document.createElement("td");
+            const locationCell = document.createElement("td");
+            const pricesCell = document.createElement("td");
+            const statusCell = document.createElement("td");
+            const actionsCell = document.createElement("td");
+
+            titleCell.textContent = concert.title;
+            artistCell.textContent = concert.artist;
+            dateCell.textContent = formatConcertDate(concert.date);
+            locationCell.textContent = concert.location;
+            pricesCell.textContent =
+                `Regular ${formatRupiah(concert.regular_price)} · ` +
+                `Festival ${formatRupiah(concert.festival_price)} · ` +
+                `VIP ${formatRupiah(concert.vip_price)}`;
+
+            const statusBadge = document.createElement("span");
+            statusBadge.className = concert.is_active
+                ? "badge text-bg-success"
+                : "badge text-bg-secondary";
+            statusBadge.textContent = concert.is_active ? "Aktif" : "Nonaktif";
+            statusCell.appendChild(statusBadge);
+
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.className = "btn btn-sm btn-outline-light me-1";
+            editButton.textContent = "Edit";
+            editButton.addEventListener("click", () => beginConcertEdit(concert));
+
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "btn btn-sm btn-danger";
+            deleteButton.textContent = "Hapus";
+            deleteButton.addEventListener("click", () => {
+                void deleteConcert(concert, deleteButton);
+            });
+
+            actionsCell.append(editButton, deleteButton);
+            row.append(
+                titleCell,
+                artistCell,
+                dateCell,
+                locationCell,
+                pricesCell,
+                statusCell,
+                actionsCell
+            );
+            concertTable.appendChild(row);
+        });
+    }
+
+    async function loadConcerts() {
+        concertListStatus.textContent = "Memuat daftar konser...";
+        showConcertTableMessage("Memuat...");
+
+        try {
+            const { data: concerts, error } = await supabase
+                .from("concerts")
+                .select(
+                    "id, title, artist, date, location, description, poster_url, regular_price, festival_price, vip_price, is_active, created_at, updated_at"
+                )
+                .order("created_at", { ascending: false });
+
+            if (error) throw error;
+
+            renderConcerts(concerts || []);
+            concertListStatus.textContent =
+                `${(concerts || []).length} konser dimuat dari Supabase.`;
+        } catch (error) {
+            console.error("Concert list error:", error);
+            totalConcerts.textContent = "—";
+            concertListStatus.textContent =
+                "Gagal memuat konser: " + error.message;
+            showConcertTableMessage("Daftar konser tidak dapat dimuat.");
+        }
+    }
+
+    function getConcertFormData() {
+        const title = document.getElementById("concertTitle").value.trim();
+        const artist = document.getElementById("concertArtist").value.trim();
+        const dateInput = document.getElementById("concertDate").value;
+        const location = document.getElementById("concertLocation").value.trim();
+        const description =
+            document.getElementById("concertDescription").value.trim();
+        const posterUrl =
+            document.getElementById("concertPosterUrl").value.trim();
+        const regularPrice = Number(
+            document.getElementById("regularPrice").value
+        );
+        const festivalPrice = Number(
+            document.getElementById("festivalPrice").value
+        );
+        const vipPrice = Number(document.getElementById("vipPrice").value);
+        const date = new Date(dateInput);
+
+        if (!title || !artist || !dateInput || !location || !description || !posterUrl) {
+            throw new Error("Semua informasi konser wajib diisi.");
+        }
+        if (Number.isNaN(date.getTime())) {
+            throw new Error("Tanggal dan waktu konser tidak valid.");
+        }
+
+        try {
+            const poster = new URL(posterUrl);
+            if (poster.protocol !== "http:" && poster.protocol !== "https:") {
+                throw new Error("URL poster harus menggunakan HTTP atau HTTPS.");
+            }
+        } catch (error) {
+            throw new Error(error.message || "URL poster tidak valid.");
+        }
+
+        const prices = [
+            ["Regular", regularPrice],
+            ["Festival", festivalPrice],
+            ["VIP", vipPrice]
+        ];
+        const invalidPrice = prices.find(
+            ([, price]) => !Number.isFinite(price) || price <= 0
+        );
+        if (invalidPrice) {
+            throw new Error(`Harga tiket ${invalidPrice[0]} harus berupa angka positif.`);
+        }
+
+        return {
+            title,
+            artist,
+            date: date.toISOString(),
+            location,
+            description,
+            poster_url: posterUrl,
+            regular_price: regularPrice,
+            festival_price: festivalPrice,
+            vip_price: vipPrice,
+            is_active: document.getElementById("concertIsActive").checked
+        };
+    }
+
+    function resetConcertForm() {
+        editingConcertId = null;
+        concertForm.reset();
+        document.getElementById("concertIsActive").checked = true;
+        concertFormTitle.textContent = "Tambah Konser";
+        concertSubmitButton.textContent = "Tambah Konser";
+        cancelConcertEdit.classList.add("d-none");
+    }
+
+    function beginConcertEdit(concert) {
+        editingConcertId = concert.id;
+        document.getElementById("concertTitle").value = concert.title;
+        document.getElementById("concertArtist").value = concert.artist;
+        document.getElementById("concertDate").value =
+            toDateTimeLocal(concert.date);
+        document.getElementById("concertLocation").value = concert.location;
+        document.getElementById("concertDescription").value =
+            concert.description;
+        document.getElementById("concertPosterUrl").value =
+            concert.poster_url;
+        document.getElementById("regularPrice").value = concert.regular_price;
+        document.getElementById("festivalPrice").value =
+            concert.festival_price;
+        document.getElementById("vipPrice").value = concert.vip_price;
+        document.getElementById("concertIsActive").checked =
+            Boolean(concert.is_active);
+        concertFormTitle.textContent = "Edit Konser";
+        concertSubmitButton.textContent = "Simpan Perubahan";
+        cancelConcertEdit.classList.remove("d-none");
+        setConcertMessage("Ubah data konser, lalu simpan perubahan.", "info");
+        concertForm.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    async function deleteConcert(concert, button) {
+        if (!window.confirm(`Hapus konser "${concert.title}"?`)) return;
+
+        button.disabled = true;
+        button.textContent = "Menghapus...";
+        try {
+            const { data, error } = await supabase
+                .from("concerts")
+                .delete()
+                .eq("id", concert.id)
+                .select("id")
+                .maybeSingle();
+
+            if (error) throw error;
+            if (!data) {
+                throw new Error("Konser tidak ditemukan atau akses ditolak.");
+            }
+
+            setConcertMessage("Konser berhasil dihapus.", "success");
+            await loadConcerts();
+        } catch (error) {
+            console.error("Concert delete error:", error);
+            setConcertMessage("Gagal menghapus konser: " + error.message, "danger");
+            button.disabled = false;
+            button.textContent = "Hapus";
+        }
+    }
+
+    concertFormTitle.textContent = "Tambah Konser";
+    cancelConcertEdit.addEventListener("click", () => {
+        resetConcertForm();
+        setConcertMessage("", "");
+    });
+
+    concertForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        if (isSavingConcert) return;
+
+        let payload;
+        try {
+            payload = getConcertFormData();
+        } catch (error) {
+            setConcertMessage(error.message, "danger");
+            return;
+        }
+
+        isSavingConcert = true;
+        concertSubmitButton.disabled = true;
+        concertSubmitButton.textContent = editingConcertId
+            ? "Menyimpan..."
+            : "Menambahkan...";
+
+        try {
+            if (editingConcertId) {
+                const { data, error } = await supabase
+                    .from("concerts")
+                    .update(payload)
+                    .eq("id", editingConcertId)
+                    .select("id")
+                    .maybeSingle();
+
+                if (error) throw error;
+                if (!data) {
+                    throw new Error("Konser tidak ditemukan atau akses ditolak.");
+                }
+                setConcertMessage("Perubahan konser berhasil disimpan.", "success");
+            } else {
+                const { data, error } = await supabase
+                    .from("concerts")
+                    .insert(payload)
+                    .select("id")
+                    .single();
+
+                if (error) throw error;
+                if (!data) throw new Error("Konser tidak berhasil disimpan.");
+                setConcertMessage("Konser berhasil ditambahkan.", "success");
+            }
+
+            resetConcertForm();
+            await loadConcerts();
+        } catch (error) {
+            console.error("Concert save error:", error);
+            setConcertMessage("Gagal menyimpan konser: " + error.message, "danger");
+        } finally {
+            isSavingConcert = false;
+            concertSubmitButton.disabled = false;
+            concertSubmitButton.textContent = editingConcertId
+                ? "Simpan Perubahan"
+                : "Tambah Konser";
+        }
+    });
+
+    async function verifyAdminAccess() {
+        try {
+            const { data: userData, error: userError } =
+                await supabase.auth.getUser();
+
+            if (userError) throw userError;
+
+            if (!userData.user) {
+                window.location.replace("login.html");
+                return;
+            }
+
+            const { data: profile, error: profileError } = await supabase
+                .from("profiles")
+                .select("role")
+                .eq("id", userData.user.id)
+                .maybeSingle();
+
+            if (profileError) throw profileError;
+
+            if (!profile || profile.role !== "admin") {
+                status.innerHTML = `
+                    <div class="panel mx-auto" style="max-width: 520px;">
+                        <h4 class="text-danger">Akses ditolak</h4>
+                        <p class="text-secondary mb-0">
+                            Halaman ini hanya dapat diakses oleh admin.
+                        </p>
+                    </div>
+                `;
+                window.setTimeout(() => {
+                    window.location.replace("index.html");
+                }, 1500);
+                return;
+            }
+
+            dashboard.classList.remove("d-none");
+            status.classList.add("d-none");
+            await loadConcerts();
+        } catch (error) {
+            console.error("Admin access check error:", error);
+            status.innerHTML = `
+                <div class="panel mx-auto" style="max-width: 520px;">
+                    <h4 class="text-danger">Akses admin tidak dapat diverifikasi</h4>
+                    <p class="text-secondary mb-0">
+                        Silakan periksa koneksi atau muat ulang halaman.
+                    </p>
+                </div>
+            `;
+        }
+    }
+
+    verifyAdminAccess();
 </script>
 </body>
 </html>
