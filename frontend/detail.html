@@ -7,35 +7,69 @@
     <title>Detail Konser | LIVELY</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+
     <style>
         body { background: #101010; color: #fff; }
+
         .detail-hero {
             padding: 100px 0 60px;
             background: linear-gradient(120deg, #242018, #101010);
         }
+
         .detail-card {
             background: #1c1c1c;
             border: 1px solid #39332a;
             border-radius: 16px;
             padding: 25px;
         }
+
         .ticket-option {
+            display: block;
+            width: 100%;
+            text-align: left;
             border: 1px solid #51452e;
             border-radius: 12px;
             padding: 18px;
             margin-bottom: 15px;
             background: #222;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s ease;
         }
+
+        .ticket-option:hover {
+            border-color: #d6ad60;
+            transform: translateY(-2px);
+        }
+
+        .ticket-option.selected {
+            border: 2px solid #d6ad60;
+            background: #30291e;
+            box-shadow: 0 0 12px rgba(214, 173, 96, 0.15);
+        }
+
         .gold { color: #d6ad60; }
+
         .btn-gold {
             background: #d6ad60;
             color: #111;
             font-weight: bold;
             border: none;
         }
-        .btn-gold:hover { background: #edc77d; }
+
+        .btn-gold:hover {
+            background: #edc77d;
+            color: #111;
+        }
+
+        .btn-gold:disabled {
+            background: #665637;
+            color: #aaa;
+            cursor: not-allowed;
+        }
     </style>
 </head>
+
 <body>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-black">
@@ -55,14 +89,18 @@
 
 <section class="container py-5">
     <div class="row g-4">
+
         <div class="col-lg-7">
             <div class="detail-card h-100">
                 <h3 class="gold mb-4">Informasi Konser</h3>
+
                 <p><strong>Artis:</strong> <span id="artistInfo">-</span></p>
                 <p><strong>Tanggal:</strong> Akan diumumkan</p>
                 <p><strong>Lokasi:</strong> Akan diumumkan</p>
                 <p><strong>Genre:</strong> <span id="genreInfo">-</span></p>
+
                 <hr class="border-secondary">
+
                 <h5>About the Concert</h5>
                 <p class="text-secondary">
                     Nikmati pengalaman musik secara langsung bersama
@@ -76,38 +114,62 @@
             <div class="detail-card">
                 <h3 class="gold mb-4">Pilihan Tiket</h3>
 
-                <div class="ticket-option">
+                <button type="button"
+                    class="ticket-option"
+                    data-ticket="Regular"
+                    data-price="150000"
+                    aria-pressed="false">
+
                     <div class="d-flex justify-content-between">
                         <strong>Regular</strong>
                         <span class="gold">Rp150.000</span>
                     </div>
                     <small class="text-secondary">Akses area regular</small>
-                </div>
+                </button>
 
-                <div class="ticket-option">
+                <button type="button"
+                    class="ticket-option"
+                    data-ticket="Festival"
+                    data-price="250000"
+                    aria-pressed="false">
+
                     <div class="d-flex justify-content-between">
                         <strong>Festival</strong>
                         <span class="gold">Rp250.000</span>
                     </div>
                     <small class="text-secondary">Akses area festival</small>
-                </div>
+                </button>
 
-                <div class="ticket-option">
+                <button type="button"
+                    class="ticket-option"
+                    data-ticket="VIP"
+                    data-price="400000"
+                    aria-pressed="false">
+
                     <div class="d-flex justify-content-between">
                         <strong>VIP</strong>
                         <span class="gold">Rp400.000</span>
                     </div>
                     <small class="text-secondary">Akses area VIP</small>
-                </div>
+                </button>
 
-		<a id="orderButton" class="btn btn-gold w-100 mt-3" href="#">
- 		   Pesan Tiket
-			</a>
+                <p id="selectedInfo" class="text-secondary small mb-2">
+                    Pilih jenis tiket terlebih dahulu.
+                </p>
+
+                <button id="orderButton"
+                    class="btn btn-gold w-100 mt-2"
+                    type="button"
+                    disabled>
+                    Pesan Tiket
+                </button>
+
                 <small class="text-secondary d-block mt-3">
                     *Harga dan jadwal di atas masih berupa contoh.
                 </small>
             </div>
         </div>
+
     </div>
 </section>
 
@@ -117,6 +179,7 @@
 
 <script>
     const params = new URLSearchParams(window.location.search);
+
     const artist = params.get("artist") || "Slank";
     const genre = params.get("genre") || "Rock";
 
@@ -124,6 +187,52 @@
     document.getElementById("artistInfo").textContent = artist;
     document.getElementById("genreInfo").textContent = genre;
     document.title = artist + " | LIVELY";
+
+    // Sistem pemilihan tiket
+    const ticketOptions = document.querySelectorAll(".ticket-option");
+    const orderButton = document.getElementById("orderButton");
+    const selectedInfo = document.getElementById("selectedInfo");
+
+    let selectedTicket = null;
+
+    ticketOptions.forEach(option => {
+        option.addEventListener("click", function() {
+
+            // Hapus pilihan sebelumnya
+            ticketOptions.forEach(ticket => {
+                ticket.classList.remove("selected");
+                ticket.setAttribute("aria-pressed", "false");
+            });
+
+            // Aktifkan pilihan baru
+            this.classList.add("selected");
+            this.setAttribute("aria-pressed", "true");
+
+            selectedTicket = {
+                name: this.dataset.ticket,
+                price: Number(this.dataset.price)
+            };
+
+            selectedInfo.textContent =
+                "Dipilih: " + selectedTicket.name +
+                " — Rp" + selectedTicket.price.toLocaleString("id-ID");
+
+            orderButton.disabled = false;
+        });
+    });
+
+    // Lanjut ke halaman keranjang
+    orderButton.addEventListener("click", function() {
+        if (!selectedTicket) return;
+
+        const query = new URLSearchParams({
+            artist: artist,
+            genre: genre,
+            ticket: selectedTicket.name
+        });
+
+        window.location.href = "cart.html?" + query.toString();
+    });
 </script>
 
 </body>

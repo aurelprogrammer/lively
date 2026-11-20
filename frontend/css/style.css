@@ -320,7 +320,7 @@ body {
 }
 
 .concert-hero {
-    background: linear-gradient(120deg, #111, #30271d);
+    background: linear-gradient(120deg, rgba(17, 17, 17, .78), rgba(48, 39, 29, .55)), url("../images/cc.jpg") center / cover;
     color: white;
     padding: 90px 0;
 }

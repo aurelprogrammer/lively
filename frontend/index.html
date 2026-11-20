@@ -22,9 +22,21 @@
                 <li class="nav-item"><a class="nav-link" href="concerts.html">Concerts</a></li>
                 <li class="nav-item"><a class="nav-link" href="#categories">Categories</a></li>
             </ul>
-            <div class="d-flex gap-2">
-                <a href="login.html" class="btn btn-outline-light rounded-pill px-4">Login</a>
-                <a href="register.html" class="btn btn-gold rounded-pill px-4">Sign Up</a>
+            <div class="d-flex align-items-center gap-2">
+                <a id="loginNavLink" href="login.html" class="btn btn-outline-light rounded-pill px-4">Login</a>
+                <a id="signupNavLink" href="register.html" class="btn btn-gold rounded-pill px-4">Sign Up</a>
+                <div id="profileDropdown" class="dropdown d-none">
+                    <button class="btn btn-outline-light rounded-pill px-4 dropdown-toggle"
+                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span id="profileName">Pengguna</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><span id="profileEmail" class="dropdown-item-text small"></span></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><button id="logoutButton" class="dropdown-item" type="button">Logout</button></li>
+                    </ul>
+                </div>
+                <span id="authMessage" class="small text-danger d-none" role="status" aria-live="polite"></span>
             </div>
         </div>
     </div>

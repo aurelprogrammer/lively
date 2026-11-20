@@ -110,50 +110,156 @@
     </div>
 </div>
 
-<script>
-    const order = JSON.parse(sessionStorage.getItem("livelyOrder") || "null");
+
+<script type="module">
+    import { supabase } from "./js/supabase.js";
+
+    const order = JSON.parse(
+        sessionStorage.getItem("livelyOrder") || "null"
+    );
+
+    const form = document.getElementById("checkoutForm");
+    const message = document.getElementById("checkoutMessage");
+    const submitButton = form.querySelector('button[type="submit"]');
 
     const rupiah = number =>
         "Rp" + Number(number).toLocaleString("id-ID");
 
+    // Tampilkan ringkasan pesanan
     if (!order) {
         document.querySelector(".container.py-5").innerHTML = `
             <div class="checkout-card text-center">
                 <h3 class="gold">Belum Ada Pesanan</h3>
-                <p class="text-secondary">Silakan pilih konser dan tiket terlebih dahulu.</p>
-                <a href="concerts.html" class="btn btn-warning">Pilih Konser</a>
+                <p class="text-secondary">
+                    Silakan pilih konser dan tiket terlebih dahulu.
+                </p>
+                <a href="concerts.html" class="btn btn-warning">
+                    Pilih Konser
+                </a>
             </div>
         `;
     } else {
         document.getElementById("summaryArtist").textContent = order.artist;
         document.getElementById("summaryTicket").textContent = order.ticket;
         document.getElementById("summaryQty").textContent = order.quantity;
-        document.getElementById("summaryTotal").textContent = rupiah(order.total);
+        document.getElementById("summaryTotal").textContent =
+            rupiah(order.total);
     }
 
-    document.getElementById("checkoutForm").addEventListener("submit", function(event) {
+    // Periksa sesi login
+    async function checkLogin() {
+        const { data, error } = await supabase.auth.getUser();
+
+        if (error || !data.user) {
+            message.innerHTML = `
+                <span class="text-warning">
+                    Silakan <a href="login.html">login</a> terlebih dahulu
+                    sebelum membuat pesanan.
+                </span>
+            `;
+            submitButton.disabled = true;
+            return false;
+        }
+
+        submitButton.disabled = false;
+
+        // Isi email otomatis jika tersedia
+        document.getElementById("buyerEmail").value =
+            data.user.email || "";
+
+        return true;
+    }
+
+    checkLogin();
+
+    // Proses pesanan simulasi
+    form.addEventListener("submit", async function(event) {
         event.preventDefault();
 
         if (!order) return;
 
-        const buyer = {
-            name: document.getElementById("buyerName").value.trim(),
-            email: document.getElementById("buyerEmail").value.trim(),
-            phone: document.getElementById("buyerPhone").value.trim(),
-            payment: document.getElementById("paymentMethod").value
-        };
+        submitButton.disabled = true;
+        submitButton.textContent = "Memproses...";
+        message.textContent = "Sedang membuat pesanan simulasi...";
 
-        const receipt = {
-            ...order,
-            ...buyer,
-            orderId: "LV" + Date.now(),
-            status: "Menunggu Pembayaran"
-        };
+        try {
+            const { data: authData, error: authError } =
+                await supabase.auth.getUser();
 
-        sessionStorage.setItem("livelyReceipt", JSON.stringify(receipt));
-        window.location.href = "success.html";
+            if (authError || !authData.user) {
+                throw new Error("Silakan login terlebih dahulu.");
+            }
+
+            const buyer = {
+                name: document.getElementById("buyerName").value.trim(),
+                email: document.getElementById("buyerEmail").value.trim(),
+                phone: document.getElementById("buyerPhone").value.trim(),
+                payment: document.getElementById("paymentMethod").value
+            };
+
+            // Panggil function Supabase
+            const { data, error } = await supabase.rpc(
+                "create_demo_order",
+                {
+                    p_buyer_name: buyer.name,
+                    p_buyer_email: buyer.email,
+                    p_buyer_phone: buyer.phone,
+                    p_artist: order.artist,
+                    p_ticket_type: order.ticket,
+                    p_quantity: Number(order.quantity),
+                    p_payment_method: buyer.payment
+                }
+            );
+
+            if (error) throw error;
+
+            const result = Array.isArray(data) ? data[0] : data;
+
+            if (!result) {
+                throw new Error("Data pesanan tidak ditemukan.");
+            }
+
+            // Ambil tiket yang dibuat oleh function
+            const { data: tickets, error: ticketError } =
+                await supabase
+                    .from("tickets")
+                    .select("ticket_code, qr_token, ticket_status")
+                    .eq("order_id", result.order_id);
+
+            // Simpan struk simulasi untuk halaman sukses
+            const receipt = {
+                ...order,
+                ...buyer,
+                orderId: result.order_code,
+                order_id: result.order_id,
+                unit_price: result.unit_price,
+                total: result.total,
+                quantity: result.quantity,
+                status: "SIMULASI BERHASIL",
+                tickets: ticketError ? [] : tickets
+            };
+
+            sessionStorage.setItem(
+                "livelyReceipt",
+                JSON.stringify(receipt)
+            );
+
+            window.location.href = "success.html";
+
+        } catch (error) {
+            console.error("Checkout error:", error);
+
+            message.textContent =
+                error.message || "Terjadi kesalahan saat membuat pesanan.";
+
+            message.className = "mt-3 mb-0 text-danger";
+
+            submitButton.disabled = false;
+            submitButton.textContent = "Buat Pesanan";
+        }
     });
 </script>
+
 
 </body>
 </html>
